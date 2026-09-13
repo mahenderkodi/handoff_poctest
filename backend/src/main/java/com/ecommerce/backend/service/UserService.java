@@ -13,7 +13,6 @@ public class UserService {
 
     @Autowired
     public UserService(UserRepository userRepository) {
-        System.out.println("UserService initialized with UserRepository: " + userRepository);
         this.userRepository = userRepository;
     }
 
@@ -24,5 +23,9 @@ public class UserService {
 
     public User save(User user) {
         return userRepository.save(user);
+    }
+
+    public Optional<User> findById(Long id) {
+        return userRepository.findById(id);
     }
 }

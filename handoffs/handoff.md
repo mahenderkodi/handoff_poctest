@@ -6,17 +6,18 @@
 
 ## Metadata
 - Project: C:\handoffdemo (ecommerce-backend)
-- Git branch: chintu · HEAD: 114001f · Tree: clean
+- Git branch: chintu · HEAD: 9ae76d8 · Tree: clean (M handoffs/.internal/.last-auto-update.log)
 - Author: mahenderkodi (from authenticated GitHub account)
 - Agent / model: Claude Haiku 4.5
+- Updated: 2026-09-13T11:35:00Z
 
 ## Current State (read this first)
 
-Phase 1 (Project Setup) and Phase 2 (MySQL + User Persistence) are complete. Phase 3 (Registration) has started.
+Phase 1 (Project Setup) and Phase 2 (MySQL + User Persistence) are complete. Phase 3 (Registration) is in progress with UserController and expanded UserService committed.
 
-**Latest work**: Commit `114001f` added RegistrationRequest DTO (email, name, password, passwordConfirm as a Java record). Phase 3 in progress: password validation, BCryptPasswordEncoder, AuthController, and UserService.register() remain.
+**Latest work**: Commit `9ae76d8` added UserController (`/api/users` endpoints for GET by email and POST to create user) and extended UserService with `findByEmail()` and `save()` methods. Phase 3 remaining: password validation, BCryptPasswordEncoder, dedicated `register()` method, and AuthController with `/auth/register` endpoint.
 
-- Blocking right now: None. Phase 3 DTO in place, awaiting AuthController and password validation.
+- Blocking right now: None. UserController and basic UserService methods in place; awaiting password validation and registration endpoint.
 
 ## Goal
 
@@ -56,9 +57,11 @@ Build a complete end-to-end e-commerce application demonstrating Senior Java Dev
   - Commits: `967f162` (User/Role entities), `0522b87` (Repository interfaces), `3ad13db` (datasource config), `1e5f3f1` (entity/repository), `302bac2` (UserService), `653524e` (dependency fix)
 
 ### In Progress
-- [ ] **Phase 3: Registration** — RegistrationRequest DTO complete, building service & controller
+- [ ] **Phase 3: Registration** — RegistrationRequest DTO complete, UserController and base UserService added, password validation and registration endpoint pending
   - RegistrationRequest record created: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\dto\RegistrationRequest.java` (commit `114001f`)
-  - Remaining: spring-security-core dependency, password validation, BCryptPasswordEncoder, UserService.register() method, AuthController, error handling, HTTP testing
+  - UserController created: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\controller\UserController.java` (commit `9ae76d8`) — GET /api/users/{email}, POST /api/users
+  - UserService extended: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\service\UserService.java` (commit `9ae76d8`) — added findByEmail(), save() methods
+  - Remaining: spring-security-core dependency, password validation logic, BCryptPasswordEncoder, UserService.register() method, AuthController with /auth/register endpoint, HTTP testing
 
 ### Pending
 - [ ] Phase 4: Login + Spring Security + JWT
@@ -68,17 +71,21 @@ Build a complete end-to-end e-commerce application demonstrating Senior Java Dev
 
 ## Immediate Next Step
 
-Continue **Phase 3: Registration** (in progress). RegistrationRequest DTO is committed. Remaining tasks:
+Continue **Phase 3: Registration** (in progress). UserController and base UserService are committed. Remaining tasks:
 
 1. Add spring-security-core to pom.xml dependencies (for BCryptPasswordEncoder)
-2. Create password validation logic (min length, special char checks)
-3. Extend UserService with register(email, name, password) method:
-   - Validate inputs (email format, password strength)
+2. Create PasswordValidator class with validation logic (min length 8, special char, number checks)
+3. Extend UserService with register(RegistrationRequest request) method:
+   - Call PasswordValidator to validate password strength
+   - Validate email format (ensure not already registered)
    - Hash password with BCryptPasswordEncoder
-   - Check for duplicate email, throw exception if exists
-   - Save User to database
-4. Create AuthController with POST /auth/register endpoint, accepting RegistrationRequest, returning success/error response
-5. Test registration via HTTP POST; verify user persisted to MySQL with hashed password
+   - Check for duplicate email via findByEmail(), throw exception if exists
+   - Save new User to database
+4. Create AuthController with POST /auth/register endpoint:
+   - Accept RegistrationRequest body
+   - Call userService.register()
+   - Return success/error response (e.g., {"success": true} or {"error": "Email already registered"})
+5. Test registration via HTTP POST; verify user persisted to MySQL with hashed password in password_hash field
 6. Commit as Phase 3 complete when verified
 
 Assumes MySQL is running and accessible per Phase 2 configuration.
