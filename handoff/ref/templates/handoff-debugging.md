@@ -1,0 +1,61 @@
+# Handoff — {{bug_title}} (debugging)
+
+> Generated: {{utc_timestamp}} · Archived predecessor: {{archived_snapshot_path_or_none}}
+> Variant of the general template, tuned for an in-progress investigation. Read top-to-bottom.
+> This file lives at the stable path `handoffs/handoff.md` — updated in place, not re-created per write.
+
+## Metadata
+- Project: {{project_path}}
+- Git branch: {{git_branch}} · HEAD: {{git_head_short}} · Tree: {{clean_or_dirty}}
+- Author: {{author}} (from `gh api user`, falling back to `git config user.name`/`user.email`)
+- Agent / model: {{agent_model}}
+
+## Current State (read this first)
+{{where_the_investigation_stands_right_now}}
+- Blocking right now: {{blocker_or_none}}
+
+## Symptom (verbatim)
+- Repro: {{exact_steps_or_command}}
+- Observed: {{verbatim_error_or_wrong_output}}
+- Expected: {{what_should_happen}}
+- First seen / frequency: {{when_and_how_often}}
+
+## Hypotheses
+- [ ] {{hypothesis}} — status: {{open_supported_or_ruled_out}}; evidence: {{evidence}}
+
+## What is RULED OUT — DO NOT REDO
+- [x] {{checked_path_and_why_it_is_not_the_cause}}
+
+## Evidence gathered
+- {{log_line_stack_frame_value_with_file_line}}
+
+## Leading suspect
+{{current_best_explanation_with_file_line}}
+
+## Immediate Next Step
+{{the_single_exact_next_probe eg add log at src/x.ts:88 then re-run the repro}}
+
+## Files / Areas Touched
+<read-files>
+{{files_read_one_per_line}}
+</read-files>
+<modified-files>
+{{files_modified_one_per_line}}
+</modified-files>
+
+## Gotchas / Landmines
+- {{flaky_env_or_red_herring}} — note: {{detail}}
+
+## Verification (copy-paste, exact)
+```bash
+{{repro_command}}
+{{regression_test_command}}
+```
+Expected once fixed: {{healthy_result}}
+
+## Open Questions (preserve verbatim)
+- {{unanswered_user_question_or_NONE}}
+
+## Handoff Chain
+- This doc: `handoffs/handoff.md` (stable — always the current state, updated in place)
+- Archived predecessor: {{archived_snapshot_path_or_none}} (set only when this write archived-and-compacted a prior version over the size threshold — see `ref/pipeline.md` step 5)
