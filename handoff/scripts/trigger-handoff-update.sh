@@ -99,8 +99,11 @@
 # with no new commit, and leaves the PreCompact-triggered case -- which can
 # have progress-log content with no new commit at all -- still working).
 #
-# Never blocks `git commit` -- runs Claude in the background and logs its
-# own output to handoffs/.internal/.last-auto-update.log for debugging.
+# Runs synchronously, bounded by a timeout (see "RUN MADE SYNCHRONOUS
+# (2026-09-13)" further down for why this changed from backgrounded) -- adds
+# a few seconds to `git commit`, capped well below the timeout in the worst
+# case, and logs its own output to handoffs/.internal/.last-auto-update.log
+# for debugging.
 #
 # Everything this add-on writes for its own bookkeeping (.progress.log,
 # .last-auto-update.log) lives under handoffs/.internal/, deliberately kept
@@ -150,7 +153,48 @@
 # You can still update deliberately later (npm update -g @anthropic-ai/claude-code);
 # this only stops the CLI from silently racing itself against this script.
 
-set -uo pipefail
+# NOUNSET DROPPED (2026-09-13) -- this used to be `set -uo pipefail`. Proven
+# on a real test (a throwaway repo, sourcing a real, unmodified .bashrc) that
+# `set -u` + sourcing an arbitrary third-party shell rc file is a landmine:
+# if that rc file references ANY variable that happens to be unset in this
+# non-interactive, hook-spawned shell -- extremely common, since .bashrc/
+# .bash_profile/.profile are written for interactive terminals, not this
+# context -- bash's nounset treats that as fatal and kills the ENTIRE
+# script right there, silently: no error visible to whatever invoked git
+# commit, and nothing written to handoffs/.internal/.last-auto-update.log,
+# because that killed the process before even reaching the point where this
+# script opens that log for writing. This exactly matches a real symptom:
+# the git hook fires and works when Claude Code makes the commit, but two
+# Copilot-CLI-driven commits in a row produced zero trace in
+# .last-auto-update.log even after the tool-agnostic evidence fix below was
+# already in place -- consistent with Copilot CLI spawning git's hook in a
+# shell environment (different HOME/PATH/env than Claude Code's own shell)
+# where sourcing the profile files below hits an unset variable and dies,
+# while Claude Code's happens not to. `pipefail` alone carries none of that
+# risk and is kept.
+set -o pipefail
+
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$repo_root" || exit 0
+
+internal_dir="$repo_root/handoffs/.internal"
+progress_log="$internal_dir/.progress.log"
+update_log="$internal_dir/.last-auto-update.log"
+last_handled_file="$internal_dir/.last-handled-commit"
+mkdir -p "$internal_dir" 2>/dev/null
+
+# Unconditional heartbeat (2026-09-13) -- written before anything below that
+# could still fail (profile sourcing, `command -v claude`, the claude call
+# itself), so a run that dies partway through still leaves proof it got at
+# least this far, and what its environment looked like at that point. This
+# is what would have caught the nounset problem above immediately instead
+# of needing forensic reconstruction after the fact.
+{
+  printf '%s hook fired (pid %s)\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$"
+  printf '  repo_root=%s\n' "$repo_root"
+  printf '  HOME=%s  PWD=%s\n' "${HOME:-<unset>}" "$PWD"
+  printf '  HEAD=%s\n' "$(git rev-parse HEAD 2>&1)"
+} >> "$update_log" 2>&1
 
 # Git hooks run in a minimal, non-interactive shell -- it does NOT source
 # .bashrc / .bash_profile the way your normal terminal does, so PATH here can
@@ -171,14 +215,7 @@ for extra in "$HOME/AppData/Roaming/npm" "$HOME/.npm-global/bin" "/usr/local/bin
 done
 export PATH
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-cd "$repo_root" || exit 0
-
-internal_dir="$repo_root/handoffs/.internal"
-progress_log="$internal_dir/.progress.log"
-update_log="$internal_dir/.last-auto-update.log"
-last_handled_file="$internal_dir/.last-handled-commit"
-mkdir -p "$internal_dir" 2>/dev/null
+printf '  claude resolves to: %s\n' "$(command -v claude 2>&1 || echo '<not found>')" >> "$update_log" 2>&1
 
 current_head="$(git rev-parse HEAD 2>/dev/null || true)"
 last_handled="$(cat "$last_handled_file" 2>/dev/null || true)"
@@ -243,6 +280,15 @@ if [ -z "$base_commit" ] && [ -n "$current_head" ]; then
 fi
 git_evidence="$(gather_git_evidence "$base_commit" "$current_head")"
 
+# See "RUN MADE SYNCHRONOUS (2026-09-13)" below run_update() for why this
+# exists. `timeout` ships with Git for Windows' coreutils and with most
+# Linux/macOS setups, but isn't guaranteed everywhere -- degrade to running
+# unbounded rather than erroring out if it's genuinely missing.
+timeout_cmd=""
+if command -v timeout >/dev/null 2>&1; then
+  timeout_cmd="timeout 150"
+fi
+
 run_update() {
   local handoff_file="$repo_root/handoffs/handoff.md"
 
@@ -252,16 +298,13 @@ run_update() {
   local before_mtime=""
   [ -f "$handoff_file" ] && before_mtime="$(stat -c %Y "$handoff_file" 2>/dev/null)"
 
-  # --model haiku (2026-09-13): this run is fully async (see run_update & /
-  # disown below) and never blocks git commit or push, but it was still
-  # taking 2-3 real minutes end to end -- "Use the handoff skill" makes it
-  # read SKILL.md, then pipeline.md, then a template file in sequence before
-  # it even starts composing, on top of the actual synthesis. The merge task
-  # itself is mostly mechanical (fold a tab-separated log into a fixed
-  # template), not deeply creative, so trading the default model for a
-  # faster one here is a reasonable fit. If handoff quality noticeably
-  # degrades, drop this flag (falls back to the default model) or swap it for
-  # --model sonnet.
+  # --model haiku (2026-09-13): trading the default model for a faster one
+  # here, since this task -- folding evidence into a fixed template -- is
+  # mostly mechanical, not deeply creative. Originally added purely for
+  # speed; now it also shortens the SYNCHRONOUS wait below (see the
+  # "RUN MADE SYNCHRONOUS" note further down), so it matters more than it
+  # used to. If handoff quality noticeably degrades, drop this flag (falls
+  # back to the default model) or swap it for --model sonnet.
   #
   # Evidence is now layered (2026-09-13): git_evidence (below) is always
   # present and tool-agnostic -- derived straight from the commit(s)
@@ -270,7 +313,12 @@ run_update() {
   # hook can produce (exact files read/edited, exact shell commands run) --
   # a real enrichment when Claude Code was involved, but never a
   # requirement for this run to happen.
-  claude -p "Use the handoff skill. Here is this run's evidence for
+  #
+  # $timeout_cmd (2026-09-13): see the "RUN MADE SYNCHRONOUS" note below --
+  # bounds worst case so a hung or unusually slow call can't block `git
+  # commit` forever. Resolved once, above run_update, to whatever `timeout`
+  # is available (or nothing, if it isn't).
+  $timeout_cmd claude -p "Use the handoff skill. Here is this run's evidence for
 pipeline.md step 1 -- a headless invocation has no tool history of its own,
 so this replaces it:
 
@@ -336,6 +384,33 @@ there is no one present to answer them." \
   fi
 }
 
-run_update &
-disown
+# RUN MADE SYNCHRONOUS (2026-09-13): this used to be `run_update & disown`,
+# on the theory that backgrounding + disowning would let git commit return
+# immediately while the (slower) claude call kept running independently.
+# That held for Claude Code specifically -- its Bash tool keeps one
+# persistent shell alive for the whole session, so a disowned child gets
+# time to finish and gets reparented cleanly once the shell that spawned it
+# is long-lived. It silently failed for Copilot CLI: confirmed on a real
+# repo that the heartbeat above (proving the hook fired and even resolved
+# `claude` on PATH correctly this time) got written, but nothing else ever
+# followed it -- not even a failure trace -- for over three minutes, and
+# handoff.md never changed. The likely mechanism: Copilot CLI (like most
+# tools that just need to run one git command) spawns a short-lived
+# process/console purely to run `git commit`, and tears down that whole
+# process tree the instant it returns -- taking the disowned-but-still-
+# attached `claude -p` child down with it before it can write anything,
+# especially plausible on Windows where a parent process's console/job
+# object killing its children on exit is a common default. `disown` only
+# detaches a job from the CURRENT shell's job table; it does not make the
+# process immune to its whole process tree being torn down.
+#
+# Fixed by no longer racing the invoking tool's process teardown at all:
+# run_update now runs in the foreground, bounded by $timeout_cmd (150s) so
+# a hung or unusually slow call still can't block `git commit` indefinitely.
+# This does trade away the old "never blocks commit" property for a few
+# (usually single-digit, with --model haiku) extra seconds on every commit
+# -- a reasonable price for actually working across whatever tool made the
+# commit, rather than working only for the one tool that happens to keep a
+# long-lived shell around.
+run_update
 exit 0

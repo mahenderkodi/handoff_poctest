@@ -1,0 +1,4 @@
+2026-09-13T11:30:38Z	Bash	git add backend/src/main/java/com/ecommerce/backend/dto/RegistrationRequest.java && git commit -m "$(cat <<'EOF'
+Phase 3: add RegistrationRequest DTO
+
+First step of Phase 3 (Registration) per hando

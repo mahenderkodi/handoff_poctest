@@ -150,3 +150,39 @@ If using IDE (IntelliJ, Eclipse), run `EcommerceBackendApplication.main()` direc
 The above is a handoff document from a previous session. Before continuing, check staleness (compare the Metadata git branch/HEAD to the live repo, or run `scripts/check-staleness.sh <path>` if available) and follow `ref/checklists/resume.md` if present. Then continue the work seamlessly.
 Handoff processed. Archived the previous 33KB handoff to `.archive/handoff-2026-09-13T10-27-36Z-mahenderkodi.md` and wrote a compact updated version reflecting commits 2e81fac, c555815, and 04f377d. Tree is now clean. Phase 1 is 95% complete; ready for Phase 2 (MySQL + User Persistence).
 Handoff merged. Phase 1 is now 100% complete with HomeController added. The handoff.md has been updated in place to reflect commit `a6d2a5e` and the new work. Ready for Phase 2: MySQL + User Persistence.
+2026-09-13T11:12:28Z hook fired (pid 8977)
+  repo_root=C:/handoffdemo
+  HOME=/c/Users/ADMIN  PWD=/c/handoffdemo
+  HEAD=3ad13db8e456e43f3ee9dabb9c920ba0e06093ab
+  claude resolves to: /c/Users/ADMIN/AppData/Roaming/npm/claude
+2026-09-13T11:22:31Z hook fired (pid 9023)
+  repo_root=C:/handoffdemo
+  HOME=/c/Users/ADMIN  PWD=/c/handoffdemo
+  HEAD=302bac223278463f11d236e3fe343d3bf58b4e1a
+  claude resolves to: /c/Users/ADMIN/AppData/Roaming/npm/claude
+Handoff updated successfully. Phase 2 (MySQL + User Persistence) has been moved to Done, with all five commits documented:
+- User and Role entities created
+- Repository interfaces established  
+- MySQL datasource configured
+- UserService added for persistence logic
+
+The handoff is now ready for Phase 3 (Registration), with clear expectations for the next steps: DTO creation, password encoding setup, registration method in UserService, AuthController endpoint, and error handling.
+2026-09-13T11:27:49Z hook fired (pid 9669)
+  repo_root=C:/handoffdemo
+  HOME=/c/Users/ADMIN  PWD=/c/handoffdemo
+  HEAD=653524ec995760229ecfef076731d57658415b09
+  claude resolves to: /c/Users/ADMIN/AppData/Roaming/npm/claude
+Handoff updated. The evidence has been merged:
+
+- **Commit 653524e**: Dependency fix for Phase 2 (missing JPA and MySQL connector) — now noted as complete
+- **Phase 3 start**: RegistrationRequest DTO created and in progress
+- **Metadata**: Updated to HEAD 653524e with tree state showing uncommitted Phase 3 changes
+- **Immediate Next Step**: Refreshed to show remaining Phase 3 tasks (password validation, BCryptPasswordEncoder, UserService.register(), AuthController)
+
+File remains under 30KB. Ready for next phase continuation.
+2026-09-13T11:29:51Z hook fired (pid 10390)
+  repo_root=C:/handoffdemo
+  HOME=/c/Users/ADMIN  PWD=/c/handoffdemo
+  HEAD=114001f3d20cd0e29afa52c8fec2157a1834aa71
+  claude resolves to: /c/Users/ADMIN/AppData/Roaming/npm/claude
+Handoff updated. Phase 3's RegistrationRequest DTO (commit 114001f) is now documented as complete. The file reflects the current HEAD, clean tree state, and refreshed immediate next steps focusing on spring-security-core dependency, password validation, UserService.register(), and AuthController.

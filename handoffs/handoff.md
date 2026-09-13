@@ -6,17 +6,17 @@
 
 ## Metadata
 - Project: C:\handoffdemo (ecommerce-backend)
-- Git branch: chintu · HEAD: a6d2a5e · Tree: clean
+- Git branch: chintu · HEAD: 114001f · Tree: clean
 - Author: mahenderkodi (from authenticated GitHub account)
 - Agent / model: Claude Haiku 4.5
 
 ## Current State (read this first)
 
-Phase 1 (Project Setup) is complete. A Spring Boot 3.3.4 backend project has been initialized with Maven, Java 21, and basic Spring Boot dependencies (Web, Test). The project structure is established with a main application class including startup log messages and a HomeController with a root GET endpoint. The backend builds and starts successfully. Commits: `04f377d` (setup), `c555815` (main file changes), `2e81fac` (startup logs), `a6d2a5e` (HomeController).
+Phase 1 (Project Setup) and Phase 2 (MySQL + User Persistence) are complete. Phase 3 (Registration) has started.
 
-Latest work: Added HomeController as second backend class with root GET endpoint (commit `a6d2a5e`). No Angular frontend, database, or business logic has been added yet.
+**Latest work**: Commit `114001f` added RegistrationRequest DTO (email, name, password, passwordConfirm as a Java record). Phase 3 in progress: password validation, BCryptPasswordEncoder, AuthController, and UserService.register() remain.
 
-- Blocking right now: None. Ready to proceed to Phase 2 (MySQL + User Persistence).
+- Blocking right now: None. Phase 3 DTO in place, awaiting AuthController and password validation.
 
 ## Goal
 
@@ -33,7 +33,7 @@ Build a complete end-to-end e-commerce application demonstrating Senior Java Dev
 - No unnecessary frameworks (no Kafka, Redis, Kubernetes, Docker in Phase 1-15)
 
 ## Progress
-### Done — DO NOT REDO (1 of 15 phases, 100% complete)
+### Done — DO NOT REDO (2 of 15 phases complete)
 
 - [x] **Phase 1: Project Setup** — Spring Boot backend initialized, builds and starts successfully
   - Maven pom.xml created with Spring Boot 3.3.4, Java 21, spring-boot-starter-web, spring-boot-starter-test: `C:\handoffdemo\backend\pom.xml`
@@ -44,14 +44,23 @@ Build a complete end-to-end e-commerce application demonstrating Senior Java Dev
   - Git repository initialized on branch `chintu` (tracking remote `origin` at https://github.com/mahenderkodi/handoff_poctest.git)
   - Commits pushed: `04f377d` (Phase 1 setup), `c555815` (changed main file), `2e81fac` (add startup logs), `a6d2a5e` (add HomeController)
   - Backend starts successfully on http://localhost:8080/
-  - Angular frontend: NOT STARTED (Phase 6)
+
+- [x] **Phase 2: MySQL + User Persistence** — User persistence layer complete with Spring Data JPA
+  - spring-boot-starter-data-jpa and mysql-connector-j added to pom.xml
+  - MySQL datasource configured in application.properties: `localhost:3306`, database `ecommerce_poc`
+  - User entity created with id, email, name, password_hash, created_at, updated_at: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\entity\User.java`
+  - Role entity created with many-to-many relationship to User: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\entity\Role.java`
+  - UserRepository (Spring Data JPA) created: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\repository\UserRepository.java`
+  - RoleRepository (Spring Data JPA) created: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\repository\RoleRepository.java`
+  - UserService created for user persistence business logic: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\service\UserService.java`
+  - Commits: `967f162` (User/Role entities), `0522b87` (Repository interfaces), `3ad13db` (datasource config), `1e5f3f1` (entity/repository), `302bac2` (UserService), `653524e` (dependency fix)
 
 ### In Progress
-- None currently — Phase 1 is feature-complete, awaiting Phase 2 decision
+- [ ] **Phase 3: Registration** — RegistrationRequest DTO complete, building service & controller
+  - RegistrationRequest record created: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\dto\RegistrationRequest.java` (commit `114001f`)
+  - Remaining: spring-security-core dependency, password validation, BCryptPasswordEncoder, UserService.register() method, AuthController, error handling, HTTP testing
 
 ### Pending
-- [ ] Phase 2: MySQL + User Persistence
-- [ ] Phase 3: Registration
 - [ ] Phase 4: Login + Spring Security + JWT
 - [ ] Phase 5: Product and Category Management
 - [ ] Phase 6: Angular Foundation
@@ -59,16 +68,20 @@ Build a complete end-to-end e-commerce application demonstrating Senior Java Dev
 
 ## Immediate Next Step
 
-Start **Phase 2: MySQL + User Persistence**. Previous handoff (archived) contains the detailed phase plan. Summary:
+Continue **Phase 3: Registration** (in progress). RegistrationRequest DTO is committed. Remaining tasks:
 
-1. Add `spring-boot-starter-data-jpa` and `com.mysql:mysql-connector-j` to pom.xml
-2. Configure Spring Boot datasource in `application.properties`
-3. Create User entity with id, email, name, password_hash, created_at, updated_at
-4. Create Role entity and User-Role many-to-many relationship
-5. Create UserRepository (Spring Data JPA interface)
-6. Verify backend starts and connects to MySQL without errors
+1. Add spring-security-core to pom.xml dependencies (for BCryptPasswordEncoder)
+2. Create password validation logic (min length, special char checks)
+3. Extend UserService with register(email, name, password) method:
+   - Validate inputs (email format, password strength)
+   - Hash password with BCryptPasswordEncoder
+   - Check for duplicate email, throw exception if exists
+   - Save User to database
+4. Create AuthController with POST /auth/register endpoint, accepting RegistrationRequest, returning success/error response
+5. Test registration via HTTP POST; verify user persisted to MySQL with hashed password
+6. Commit as Phase 3 complete when verified
 
-Assumes MySQL is running locally on `localhost:3306`. Database: `ecommerce_poc`.
+Assumes MySQL is running and accessible per Phase 2 configuration.
 
 ## Key Patterns / Conventions
 - **Package structure**: `com.ecommerce.backend.{entity, repository, service, controller, dto, config, security, exception}` 

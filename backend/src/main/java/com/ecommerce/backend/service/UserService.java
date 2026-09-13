@@ -13,10 +13,12 @@ public class UserService {
 
     @Autowired
     public UserService(UserRepository userRepository) {
+        System.out.println("UserService initialized with UserRepository: " + userRepository);
         this.userRepository = userRepository;
     }
 
     public Optional<User> findByEmail(String email) {
+        System.out.println("Finding user by email: " + email);
         return userRepository.findByEmail(email);
     }
 
