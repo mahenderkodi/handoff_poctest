@@ -6,18 +6,18 @@
 
 ## Metadata
 - Project: C:\handoffdemo (ecommerce-backend)
-- Git branch: chintu · HEAD: 9ae76d8 · Tree: clean (M handoffs/.internal/.last-auto-update.log)
+- Git branch: chintu · HEAD: 7008e3e · Tree: clean (M handoffs/.internal/.last-auto-update.log)
 - Author: mahenderkodi (from authenticated GitHub account)
 - Agent / model: Claude Haiku 4.5
-- Updated: 2026-09-13T11:35:00Z
+- Updated: 2026-09-13T11:36:30Z
 
 ## Current State (read this first)
 
 Phase 1 (Project Setup) and Phase 2 (MySQL + User Persistence) are complete. Phase 3 (Registration) is in progress with UserController and expanded UserService committed.
 
-**Latest work**: Commit `9ae76d8` added UserController (`/api/users` endpoints for GET by email and POST to create user) and extended UserService with `findByEmail()` and `save()` methods. Phase 3 remaining: password validation, BCryptPasswordEncoder, dedicated `register()` method, and AuthController with `/auth/register` endpoint.
+**Latest work**: Commit `7008e3e` ("updated1") added `findById()` method to UserService. Previous commit `9ae76d8` added UserController (`/api/users` endpoints for GET by email and POST to create user) and extended UserService with `findByEmail()` and `save()` methods. Phase 3 remaining: password validation, BCryptPasswordEncoder, dedicated `register()` method, and AuthController with `/auth/register` endpoint.
 
-- Blocking right now: None. UserController and basic UserService methods in place; awaiting password validation and registration endpoint.
+- Blocking right now: None. UserController and basic UserService methods (findByEmail, save, findById) in place; awaiting password validation and registration endpoint.
 
 ## Goal
 
@@ -60,7 +60,7 @@ Build a complete end-to-end e-commerce application demonstrating Senior Java Dev
 - [ ] **Phase 3: Registration** — RegistrationRequest DTO complete, UserController and base UserService added, password validation and registration endpoint pending
   - RegistrationRequest record created: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\dto\RegistrationRequest.java` (commit `114001f`)
   - UserController created: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\controller\UserController.java` (commit `9ae76d8`) — GET /api/users/{email}, POST /api/users
-  - UserService extended: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\service\UserService.java` (commit `9ae76d8`) — added findByEmail(), save() methods
+  - UserService extended: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\service\UserService.java` (commits `9ae76d8`, `7008e3e`) — added findByEmail(), save(), findById() methods
   - Remaining: spring-security-core dependency, password validation logic, BCryptPasswordEncoder, UserService.register() method, AuthController with /auth/register endpoint, HTTP testing
 
 ### Pending

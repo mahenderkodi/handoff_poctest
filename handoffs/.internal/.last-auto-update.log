@@ -323,3 +323,9 @@ mvn spring-boot:run
 
 The above is a handoff document from a previous session. Before continuing, check staleness (compare the Metadata git branch/HEAD to the live repo, or run `scripts/check-staleness.sh <path>`) and follow `ref/checklists/resume.md`. Then continue the work seamlessly.
 ```
+2026-09-13T11:59:57Z hook fired (pid 11232)
+  repo_root=C:/handoffdemo
+  HOME=/c/Users/ADMIN  PWD=/c/handoffdemo
+  HEAD=7008e3e0f29a0af2139daa780a114199860b85a1
+  claude resolves to: /c/Users/ADMIN/AppData/Roaming/npm/claude
+✓ Handoff updated. Merged commit `7008e3e` evidence: UserService now includes `findById()` method alongside earlier `findByEmail()` and `save()` additions. Phase 3 (Registration) remains in progress — password validation and AuthController with `/auth/register` endpoint are next.
