@@ -65,6 +65,40 @@
 # valid --allowedTools keyword; "Edit" is what actually governs file writes.
 # The syntax below is now the CLI-confirmed-correct form.
 #
+# GAP FOUND AND FIXED (2026-09-13): this script's OWN evidence gate --
+# `[ -s "$progress_log" ] || exit 0` -- used to be a hard requirement, not an
+# optimization. That log is written exclusively by log-progress.sh, which is
+# wired in as a Claude-Code-specific .claude/settings.json PostToolUse hook.
+# So a commit made by any OTHER tool (GitHub Copilot CLI, a plain `git
+# commit` from a terminal, an IDE's built-in git integration, ...) fires
+# .git/hooks/post-commit correctly -- git hooks are tool-agnostic by design,
+# they run on the commit itself, not on who made it -- but arrived here with
+# an empty .progress.log, and this script silently exited before ever
+# calling `claude -p`. Confirmed on a real repo: a Copilot-CLI-driven commit
+# ("Add User and Role entities...") produced only .last-auto-update.log
+# (stale, from a prior Claude Code run) with no .progress.log next to it at
+# all -- proving the git hook fired but this script bailed out on the gate.
+#
+# Fixed by no longer treating .progress.log as the only source of evidence.
+# git itself already knows exactly what changed in a commit, regardless of
+# which tool made it -- `git log`, `git diff --stat`, `git show --stat` all
+# work identically whether the commit came from Claude Code, Copilot CLI, or
+# a bare `git commit` typed by hand. This script now always derives that
+# git-based evidence itself (see gather_git_evidence() below) and passes it
+# to the headless `claude -p` call as the baseline, tool-agnostic evidence
+# for pipeline.md step 1. .progress.log, when present, is layered on top as
+# supplementary per-tool-call detail (exact file paths edited, shell
+# commands run) -- it enriches the git evidence but is no longer required
+# for a run to happen at all. A new handoffs/.internal/.last-handled-commit
+# file (just a SHA) tracks the last commit this script successfully
+# synthesized, so a run after several tool-agnostic commits in a row (e.g.
+# three plain `git commit`s before the next PostToolUse ever fires) still
+# covers the full range, not just the latest one. The only remaining skip
+# condition is truly nothing-to-do: current HEAD already matches
+# .last-handled-commit AND .progress.log is empty (covers a hook re-fire
+# with no new commit, and leaves the PreCompact-triggered case -- which can
+# have progress-log content with no new commit at all -- still working).
+#
 # Never blocks `git commit` -- runs Claude in the background and logs its
 # own output to handoffs/.internal/.last-auto-update.log for debugging.
 #
@@ -143,12 +177,71 @@ cd "$repo_root" || exit 0
 internal_dir="$repo_root/handoffs/.internal"
 progress_log="$internal_dir/.progress.log"
 update_log="$internal_dir/.last-auto-update.log"
+last_handled_file="$internal_dir/.last-handled-commit"
 mkdir -p "$internal_dir" 2>/dev/null
 
-# Nothing mechanical was recorded since the last update -> nothing to synthesize.
-[ -s "$progress_log" ] || exit 0
+current_head="$(git rev-parse HEAD 2>/dev/null || true)"
+last_handled="$(cat "$last_handled_file" 2>/dev/null || true)"
+
+# Truly nothing to do: no new commit since the last successful synthesis,
+# AND no mechanical Claude-Code evidence waiting either. (Kept as two
+# conditions, not one, so the PreCompact-triggered case -- progress-log
+# content with no new commit at all -- still runs.)
+if [ -n "$current_head" ] && [ "$current_head" = "$last_handled" ] && [ ! -s "$progress_log" ]; then
+  exit 0
+fi
 
 command -v claude >/dev/null 2>&1 || exit 0   # Claude Code CLI not on PATH here -> skip silently
+
+# Derive tool-agnostic evidence directly from git -- this is what makes a
+# commit from Copilot CLI, a bare `git commit`, or any other tool produce a
+# real handoff update, not just commits made through Claude Code itself. See
+# the "GAP FOUND AND FIXED (2026-09-13)" note above for why this exists.
+gather_git_evidence() {
+  local base="$1" head="$2"
+  if [ -n "$head" ] && [ "$base" = "$head" ]; then
+    # Fired with no new commit at all -- e.g. the PreCompact hook, or a
+    # progress log left over from mid-session work that hasn't been
+    # committed yet. There is no commit range to describe; say so plainly
+    # rather than printing a confusing empty "X..X" range.
+    echo "No new commit since the last handoff update (HEAD is still $head)."
+    echo "Any evidence for this run comes from the supplementary log below, if present."
+  elif [ -n "$head" ] && [ -n "$base" ] && git rev-parse --verify "$base" >/dev/null 2>&1; then
+    echo "Commit(s) since the last handoff update ($base..$head):"
+    echo
+    git log --format='- %h  %ad  %an: %s' --date=short "$base..$head" 2>/dev/null
+    echo
+    echo "Files changed:"
+    git diff --stat "$base" "$head" 2>/dev/null
+  elif [ -n "$head" ]; then
+    # No usable base -- either this is the very first run (no
+    # .last-handled-commit yet) or HEAD has no parent (initial commit).
+    # Describe HEAD by itself instead of a range.
+    echo "Most recent commit (no prior handled commit on record -- describing HEAD alone):"
+    echo
+    git log --format='- %h  %ad  %an: %s' --date=short -1 "$head" 2>/dev/null
+    echo
+    echo "Files in this commit:"
+    git show --stat --format='' "$head" 2>/dev/null
+  else
+    echo "(no git evidence available -- not inside a resolvable git repo at run time)"
+  fi
+}
+
+base_commit="$last_handled"
+if [ -z "$base_commit" ] && [ -n "$current_head" ]; then
+  # --verify matters here: plain `git rev-parse foo^` on a rev with no
+  # parent doesn't fail quietly -- it prints the literal unresolved string
+  # back to stdout (documented rev-parse behavior for filtering args in
+  # scripts) while still exiting non-zero. Without --verify, base_commit
+  # would end up holding that literal "<sha>^" text instead of staying
+  # empty. gather_git_evidence() re-verifies its own "base" argument before
+  # trusting it as a range, so that stray value was already harmless -- this
+  # just makes base_commit itself correct too, instead of relying solely on
+  # that inner guard.
+  base_commit="$(git rev-parse --verify "$current_head^" 2>/dev/null || true)"
+fi
+git_evidence="$(gather_git_evidence "$base_commit" "$current_head")"
 
 run_update() {
   local handoff_file="$repo_root/handoffs/handoff.md"
@@ -169,12 +262,31 @@ run_update() {
   # faster one here is a reasonable fit. If handoff quality noticeably
   # degrades, drop this flag (falls back to the default model) or swap it for
   # --model sonnet.
-  claude -p "Use the handoff skill. A mechanical progress log has been recorded at
-handoffs/.internal/.progress.log since the last update (tab-separated: UTC
-timestamp, tool name, then a file path or shell command) -- read it and treat
-its contents as this run's read/modified-file and command evidence for
-pipeline.md step 1, since a headless invocation has no tool history of its
-own to derive from. ${handoff_file:+If handoffs/handoff.md already exists, update it IN PLACE per pipeline.md step 5 -- merge this progress in (promote In Progress to Done, refresh the Immediate Next Step), do not start a fresh timestamped file.}
+  #
+  # Evidence is now layered (2026-09-13): git_evidence (below) is always
+  # present and tool-agnostic -- derived straight from the commit(s)
+  # themselves, so it works no matter what tool made them. .progress.log,
+  # when non-empty, is ADDITIONAL detail only Claude Code's own PostToolUse
+  # hook can produce (exact files read/edited, exact shell commands run) --
+  # a real enrichment when Claude Code was involved, but never a
+  # requirement for this run to happen.
+  claude -p "Use the handoff skill. Here is this run's evidence for
+pipeline.md step 1 -- a headless invocation has no tool history of its own,
+so this replaces it:
+
+--- Git evidence (authoritative; derived directly from the commit(s), so it
+holds regardless of which tool made them -- Claude Code, GitHub Copilot CLI,
+a bare git commit, or anything else) ---
+$git_evidence
+--- end git evidence ---
+$([ -s "$progress_log" ] && printf '%s\n' "
+--- Supplementary Claude-Code tool-call log (handoffs/.internal/.progress.log,
+tab-separated: UTC timestamp, tool name, then a file path or shell command --
+extra per-call detail on top of the git evidence above, only available for
+the portion of this work that went through Claude Code itself; read the file
+directly rather than trusting this description alone) ---")
+
+${handoff_file:+If handoffs/handoff.md already exists, update it IN PLACE per pipeline.md step 5 -- merge this evidence in (promote In Progress to Done, refresh the Immediate Next Step), do not start a fresh timestamped file.}
 If the merged content would put handoffs/handoff.md at or over the size
 threshold in pipeline.md step 5 (~30KB), first archive the full current
 handoffs/handoff.md, unabridged, to handoffs/.archive/handoff-<UTC>-<author>.md,
@@ -208,6 +320,10 @@ there is no one present to answer them." \
     # skill's general "never delete, only relocate" rule, because this file
     # is internal working data (consumed input), not project history.
     rm -f "$progress_log"
+    # Record the commit this run actually covered, so the NEXT run (from
+    # whatever tool) knows where to start its git evidence range from,
+    # rather than only ever looking at HEAD's immediate parent.
+    [ -n "$current_head" ] && printf '%s\n' "$current_head" > "$last_handled_file"
   elif [ -s "$progress_log" ]; then
     # Failure: keep the evidence as a safety net instead of losing it, same
     # as before -- just relocated under .internal/ instead of handoffs/.
