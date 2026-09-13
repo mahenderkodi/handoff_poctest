@@ -265,6 +265,59 @@ gather_git_evidence() {
   fi
 }
 
+# SPEED (2026-09-13): the headless run used to figure all of this out for
+# itself -- reading SKILL.md, then ref/pipeline.md, then a template file,
+# then handoffs/handoff.md, then handoffs/.internal/.progress.log, each a
+# separate Read tool round trip (model turn -> tool call -> permission check
+# -> result -> next model turn), before it could even start composing. Worse,
+# --allowedTools here has never included Bash (see the INCIDENT note near
+# the top of this file for why), so it was NEVER able to run pipeline.md
+# step 1's own git probes (branch, HEAD, status, author) itself -- this
+# wrapper script has full git access and just... didn't hand any of that
+# over as text, leaving a real gap independent of speed. Now this script
+# gathers everything itself and embeds it as plain text in one prompt, so
+# the run ideally needs zero Read calls and exactly one Edit call.
+gather_git_metadata() {
+  local branch head status author_raw author_slug
+  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+  head="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+  status="$(git status --porcelain 2>/dev/null)"
+  # Author resolution mirrors ref/pipeline.md step 1 exactly: prefer the
+  # GitHub login of whoever is actually authenticated to push (dynamic
+  # across whichever developer/machine runs this), falling back through
+  # local git identity, never asking or guessing.
+  author_raw="$(command -v gh >/dev/null 2>&1 && gh api user --jq .login 2>/dev/null || true)"
+  [ -z "$author_raw" ] && author_raw="$(git config user.name 2>/dev/null || true)"
+  [ -z "$author_raw" ] && author_raw="$(git config user.email 2>/dev/null | cut -d@ -f1 || true)"
+  [ -z "$author_raw" ] && author_raw="unknown"
+  author_slug="$(printf '%s' "$author_raw" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
+  [ -z "$author_slug" ] && author_slug="unknown"
+  echo "Branch: $branch"
+  echo "HEAD: $head"
+  echo "Author (for Metadata / archive filename slug): $author_slug"
+  if [ -n "$status" ]; then
+    echo "Working tree: dirty --"
+    printf '%s\n' "$status"
+  else
+    echo "Working tree: clean"
+  fi
+}
+git_metadata="$(gather_git_metadata)"
+
+# Current handoffs/handoff.md content, read directly here rather than making
+# the headless run Read it itself.
+handoff_file_preview=""
+if [ -f "$repo_root/handoffs/handoff.md" ]; then
+  handoff_file_preview="$(cat "$repo_root/handoffs/handoff.md" 2>/dev/null)"
+fi
+
+# Same for the progress log, when Claude Code did populate it -- cat it
+# ourselves instead of telling the headless run to go Read the file.
+progress_content=""
+if [ -s "$progress_log" ]; then
+  progress_content="$(cat "$progress_log" 2>/dev/null)"
+fi
+
 base_commit="$last_handled"
 if [ -z "$base_commit" ] && [ -n "$current_head" ]; then
   # --verify matters here: plain `git rev-parse foo^` on a rev with no
@@ -284,9 +337,18 @@ git_evidence="$(gather_git_evidence "$base_commit" "$current_head")"
 # exists. `timeout` ships with Git for Windows' coreutils and with most
 # Linux/macOS setups, but isn't guaranteed everywhere -- degrade to running
 # unbounded rather than erroring out if it's genuinely missing.
+#
+# 240s, not 150s (2026-09-13): raised after noticing the observed "2-3
+# minutes" (up to 180s) sat uncomfortably close to the original 150s bound
+# -- a run at the slow end could have been killed by the timeout itself
+# before finishing, silently dropping that update (harmlessly retried on the
+# next commit, but still avoidable). The SPEED changes above this run_update
+# call should make actual runs much faster now that the prompt is
+# self-contained, but this margin is widened regardless, independent of
+# whether that speedup lands as hoped.
 timeout_cmd=""
 if command -v timeout >/dev/null 2>&1; then
-  timeout_cmd="timeout 150"
+  timeout_cmd="timeout 240"
 fi
 
 run_update() {
@@ -300,48 +362,66 @@ run_update() {
 
   # --model haiku (2026-09-13): trading the default model for a faster one
   # here, since this task -- folding evidence into a fixed template -- is
-  # mostly mechanical, not deeply creative. Originally added purely for
-  # speed; now it also shortens the SYNCHRONOUS wait below (see the
-  # "RUN MADE SYNCHRONOUS" note further down), so it matters more than it
-  # used to. If handoff quality noticeably degrades, drop this flag (falls
-  # back to the default model) or swap it for --model sonnet.
+  # mostly mechanical, not deeply creative. If handoff quality noticeably
+  # degrades, drop this flag (falls back to the default model) or swap it
+  # for --model sonnet.
   #
-  # Evidence is now layered (2026-09-13): git_evidence (below) is always
-  # present and tool-agnostic -- derived straight from the commit(s)
-  # themselves, so it works no matter what tool made them. .progress.log,
-  # when non-empty, is ADDITIONAL detail only Claude Code's own PostToolUse
-  # hook can produce (exact files read/edited, exact shell commands run) --
-  # a real enrichment when Claude Code was involved, but never a
-  # requirement for this run to happen.
-  #
-  # $timeout_cmd (2026-09-13): see the "RUN MADE SYNCHRONOUS" note below --
-  # bounds worst case so a hung or unusually slow call can't block `git
-  # commit` forever. Resolved once, above run_update, to whatever `timeout`
-  # is available (or nothing, if it isn't).
-  $timeout_cmd claude -p "Use the handoff skill. Here is this run's evidence for
-pipeline.md step 1 -- a headless invocation has no tool history of its own,
-so this replaces it:
+  # SPEED (2026-09-13), same date as the "SPEED" note above run_update():
+  # this prompt used to say "Use the handoff skill" and rely on the headless
+  # run to Read SKILL.md, ref/pipeline.md, handoffs/handoff.md and
+  # handoffs/.internal/.progress.log itself -- several sequential tool round
+  # trips (each: model turn, tool call, permission check, result, next model
+  # turn) before composing anything, which is most of where the observed
+  # 2-3 minutes went. Everything it would have Read is now handed over as
+  # plain text below instead: git_metadata and git_evidence (gathered with
+  # full git access this script has but the sandboxed headless run never
+  # did -- it has no Bash in --allowedTools, so it could never have run
+  # those probes itself even if told to), handoff_file_preview (the current
+  # file, so no Read is needed to see what to merge into), and
+  # progress_content (ditto for the progress log). The instructions below
+  # are pipeline.md step 3/5's own rules, condensed to what's needed to act
+  # on them, not a request to go re-read that file. Ideally this run now
+  # makes zero Read calls and exactly one Edit call. Read(handoffs/**) stays
+  # in --allowedTools as a safety net, not a requirement.
+  $timeout_cmd claude -p "Update the stable handoff file at handoffs/handoff.md for this project, in place. Do not ask questions; there is no one present to answer them.
 
---- Git evidence (authoritative; derived directly from the commit(s), so it
-holds regardless of which tool made them -- Claude Code, GitHub Copilot CLI,
-a bare git commit, or anything else) ---
+--- Git metadata (from pipeline.md step 1's own probes, run directly by the
+calling script since a headless run can't run git itself -- use these
+verbatim for the handoff's Metadata section, do not re-derive them) ---
+$git_metadata
+--- end git metadata ---
+
+--- Git evidence for what changed (authoritative; derived directly from the
+commit(s) themselves, so it holds regardless of which tool made them --
+Claude Code, GitHub Copilot CLI, a bare git commit, or anything else) ---
 $git_evidence
 --- end git evidence ---
-$([ -s "$progress_log" ] && printf '%s\n' "
---- Supplementary Claude-Code tool-call log (handoffs/.internal/.progress.log,
-tab-separated: UTC timestamp, tool name, then a file path or shell command --
-extra per-call detail on top of the git evidence above, only available for
-the portion of this work that went through Claude Code itself; read the file
-directly rather than trusting this description alone) ---")
+$([ -n "$progress_content" ] && printf '%s\n' "
+--- Supplementary Claude-Code tool-call log (tab-separated: UTC timestamp,
+tool name, then a file path or shell command -- extra per-call detail on top
+of the git evidence above, only available for the portion of this work that
+went through Claude Code itself) ---
+$progress_content
+--- end supplementary log ---")
+$([ -n "$handoff_file_preview" ] && printf '%s\n' "
+--- Current handoffs/handoff.md content (merge the evidence above into
+this -- promote In Progress to Done, refresh the Immediate Next Step, drop
+or update stale Open Questions; keep all still-relevant prior info. Do NOT
+start a fresh timestamped file; this IS the file to update in place) ---
+$handoff_file_preview
+--- end current handoff.md ---")
+$([ -z "$handoff_file_preview" ] && echo "handoffs/handoff.md does not exist yet -- create it, following ref/templates/handoff.md's structure if you have it available, otherwise a Metadata / Current State / Done / Immediate Next Step / Key Decisions / Open Questions structure.")
 
-${handoff_file:+If handoffs/handoff.md already exists, update it IN PLACE per pipeline.md step 5 -- merge this evidence in (promote In Progress to Done, refresh the Immediate Next Step), do not start a fresh timestamped file.}
-If the merged content would put handoffs/handoff.md at or over the size
-threshold in pipeline.md step 5 (~30KB), first archive the full current
-handoffs/handoff.md, unabridged, to handoffs/.archive/handoff-<UTC>-<author>.md,
-then write a compact handoffs/handoff.md whose Handoff Chain -> Archived
-predecessor points at that archived file -- never delete detail, only
-relocate it. Write the updated handoff, then stop. Do not ask questions;
-there is no one present to answer them." \
+If the merged content would put handoffs/handoff.md at or over ~30KB, first
+write the FULL merged draft, unabridged, to
+handoffs/.archive/handoff-<UTC-timestamp>-<author-slug-from-git-metadata-above>.md
+(create handoffs/.archive/ if missing; UTC timestamp like
+2026-09-13T12-00-00-000Z), then write a COMPACT handoffs/handoff.md
+containing only: Metadata, Current State, still-open Key Decisions, the
+active blocker, the single Immediate Next Step, and any still-unanswered
+Open Question -- plus a Handoff Chain -> Archived predecessor: line pointing
+at the file you just archived. Never delete detail, only relocate it into
+the archive. Write the updated handoff, then stop." \
     --allowedTools "Read(handoffs/**)" "Edit(handoffs/**)" \
     --model haiku \
     >> "$update_log" 2>&1

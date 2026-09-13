@@ -329,3 +329,15 @@ The above is a handoff document from a previous session. Before continuing, chec
   HEAD=7008e3e0f29a0af2139daa780a114199860b85a1
   claude resolves to: /c/Users/ADMIN/AppData/Roaming/npm/claude
 ✓ Handoff updated. Merged commit `7008e3e` evidence: UserService now includes `findById()` method alongside earlier `findByEmail()` and `save()` additions. Phase 3 (Registration) remains in progress — password validation and AuthController with `/auth/register` endpoint are next.
+2026-09-13T12:03:37Z hook fired (pid 11457)
+  repo_root=C:/handoffdemo
+  HOME=/c/Users/ADMIN  PWD=/c/handoffdemo
+  HEAD=25a19ed0ee0cbff5ef497c2b6025542edbcbe391
+  claude resolves to: /c/Users/ADMIN/AppData/Roaming/npm/claude
+Handoff updated successfully. I've merged the evidence from commit `25a19ed` ("updated2") which added RoleController. The handoff.md now reflects:
+
+- **Updated HEAD**: `25a19ed` (from `7008e3e`)
+- **Phase 3 progress**: RoleController added and committed alongside existing UserController and UserService
+- **Immediate next step**: Still focused on completing the registration flow (password validation, BCryptPasswordEncoder, register() method, AuthController endpoint)
+
+The file remains well under the 30KB threshold, so it was updated in place without archiving. Ready for the next handoff cycle.

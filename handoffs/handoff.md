@@ -6,16 +6,16 @@
 
 ## Metadata
 - Project: C:\handoffdemo (ecommerce-backend)
-- Git branch: chintu · HEAD: 7008e3e · Tree: clean (M handoffs/.internal/.last-auto-update.log)
+- Git branch: chintu · HEAD: 25a19ed · Tree: clean (M handoffs/.internal/.last-auto-update.log)
 - Author: mahenderkodi (from authenticated GitHub account)
 - Agent / model: Claude Haiku 4.5
-- Updated: 2026-09-13T11:36:30Z
+- Updated: 2026-09-13T12:00:00Z
 
 ## Current State (read this first)
 
-Phase 1 (Project Setup) and Phase 2 (MySQL + User Persistence) are complete. Phase 3 (Registration) is in progress with UserController and expanded UserService committed.
+Phase 1 (Project Setup) and Phase 2 (MySQL + User Persistence) are complete. Phase 3 (Registration) is in progress with UserController, RoleController, and expanded UserService committed.
 
-**Latest work**: Commit `7008e3e` ("updated1") added `findById()` method to UserService. Previous commit `9ae76d8` added UserController (`/api/users` endpoints for GET by email and POST to create user) and extended UserService with `findByEmail()` and `save()` methods. Phase 3 remaining: password validation, BCryptPasswordEncoder, dedicated `register()` method, and AuthController with `/auth/register` endpoint.
+**Latest work**: Commit `25a19ed` ("updated2") added RoleController (`/api/roles` endpoints). Previous commit `7008e3e` ("updated1") added `findById()` method to UserService. Commit `9ae76d8` added UserController (`/api/users` endpoints for GET by email and POST to create user) and extended UserService with `findByEmail()` and `save()` methods. Phase 3 remaining: password validation, BCryptPasswordEncoder, dedicated `register()` method, and AuthController with `/auth/register` endpoint.
 
 - Blocking right now: None. UserController and basic UserService methods (findByEmail, save, findById) in place; awaiting password validation and registration endpoint.
 
@@ -57,9 +57,10 @@ Build a complete end-to-end e-commerce application demonstrating Senior Java Dev
   - Commits: `967f162` (User/Role entities), `0522b87` (Repository interfaces), `3ad13db` (datasource config), `1e5f3f1` (entity/repository), `302bac2` (UserService), `653524e` (dependency fix)
 
 ### In Progress
-- [ ] **Phase 3: Registration** — RegistrationRequest DTO complete, UserController and base UserService added, password validation and registration endpoint pending
+- [ ] **Phase 3: Registration** — RegistrationRequest DTO complete, UserController, RoleController and base UserService added, password validation and registration endpoint pending
   - RegistrationRequest record created: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\dto\RegistrationRequest.java` (commit `114001f`)
   - UserController created: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\controller\UserController.java` (commit `9ae76d8`) — GET /api/users/{email}, POST /api/users
+  - RoleController created: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\controller\RoleController.java` (commit `25a19ed`) — role management endpoints
   - UserService extended: `C:\handoffdemo\backend\src\main\java\com\ecommerce\backend\service\UserService.java` (commits `9ae76d8`, `7008e3e`) — added findByEmail(), save(), findById() methods
   - Remaining: spring-security-core dependency, password validation logic, BCryptPasswordEncoder, UserService.register() method, AuthController with /auth/register endpoint, HTTP testing
 
@@ -71,7 +72,7 @@ Build a complete end-to-end e-commerce application demonstrating Senior Java Dev
 
 ## Immediate Next Step
 
-Continue **Phase 3: Registration** (in progress). UserController and base UserService are committed. Remaining tasks:
+Continue **Phase 3: Registration** (in progress). UserController, RoleController, and base UserService are committed. Remaining tasks to complete the registration flow:
 
 1. Add spring-security-core to pom.xml dependencies (for BCryptPasswordEncoder)
 2. Create PasswordValidator class with validation logic (min length 8, special char, number checks)
