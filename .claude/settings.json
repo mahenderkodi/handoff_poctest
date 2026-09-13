@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"C:\\Program Files\\Git\\usr\\bin\\bash.exe\" \"C:\\handoffdemo\\handoff\\scripts\\log-progress.sh\" \"C:\\handoffdemo\""
+          }
+        ]
+      }
+    ]
+  }
+}
